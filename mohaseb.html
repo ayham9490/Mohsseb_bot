@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>المحاسب الشخصي - النسخة السحابية</title>
+    <!-- استدعاء خط أميري -->
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root {
+            --tg-blue: #2481cc;
+            --tg-bg: #0a0f18;
+            --glass-border: rgba(255, 255, 255, 0.08);
+        }
+
+        body {
+            font-family: 'Amiri', serif;
+            background: radial-gradient(circle at 50% 0%, #1a2a3a 0%, var(--tg-bg) 100%);
+            color: white;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        /* تنسيق الأرقام الإنجليزية */
+        .en-font { font-family: 'Arial', sans-serif; font-variant-numeric: tabular-nums; }
+
+        .glass-3d {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .view-slide { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 0; right: 0; height: 70px;
+            background: rgba(10, 15, 24, 0.9); backdrop-filter: blur(15px);
+            display: flex; justify-content: space-around; align-items: center;
+            border-top: 1px solid rgba(255,255,255,0.05); z-index: 100;
+        }
+
+        .nav-item { opacity: 0.5; transition: 0.3s; cursor: pointer; display: flex; flex-direction: column; align-items: center; }
+        .nav-item.active { opacity: 1; color: #3699f0; transform: translateY(-2px); }
+
+        input, select {
+            background: rgba(0, 0, 0, 0.2) !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            color: white !important; border-radius: 12px !important;
+            padding: 12px !important; width: 100%; outline: none;
+            font-family: 'Amiri', serif;
+        }
+
+        #loading-screen {
+            position: fixed; inset: 0; background: var(--tg-bg);
+            z-index: 999; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+        }
+
+        .loader {
+            width: 48px; height: 48px; border: 5px solid #FFF;
+            border-bottom-color: #3699f0; border-radius: 50%;
+            animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="pb-24">
+
+    <!-- شاشة التحميل -->
+    <div id="loading-screen">
+        <div class="loader mb-4"></div>
+        <p class="text-blue-400 font-bold">جاري مزامنة بياناتك سحابياً...</p>
+    </div>
+
+    <!-- الصفحة الرئيسية -->
+    <section id="view-home" class="p-5 view-slide">
+        <header class="mb-6 flex justify-between items-center">
+            <div>
+                <p class="text-gray-400 text-sm">مرحباً بك،</p>
+                <h1 id="user-display" class="text-xl font-bold text-white">مستخدم تيليغرام</h1>
+            </div>
+            <div class="glass-3d px-3 py-1 text-[10px] text-green-400 border-green-500/20 flex items-center gap-1">
+                <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> سحابي نشط
+            </div>
+        </header>
+
+        <!-- الأرصدة المستقلة -->
+        <div class="glass-3d p-5 mb-8 text-center bg-gradient-to-b from-white/5 to-transparent">
+            <p class="text-gray-400 text-sm mb-4">الرصيد الإجمالي الصافي</p>
+            <div class="grid grid-cols-3 gap-2">
+                <div class="border-l border-white/5">
+                    <p class="text-[10px] text-gray-500 mb-1">دولار $</p>
+                    <div id="bal-usd" class="en-font text-lg font-bold">0</div>
+                </div>
+                <div class="border-l border-white/5">
+                    <p class="text-[10px] text-gray-500 mb-1">تركي ₺</p>
+                    <div id="bal-try" class="en-font text-lg font-bold">0</div>
+                </div>
+                <div>
+                    <p class="text-[10px] text-gray-500 mb-1">سوري ل.س</p>
+                    <div id="bal-syp" class="en-font text-lg font-bold">0</div>
+                </div>
+            </div>
+        </div>
+
+        <h3 class="text-lg font-bold mb-4">أحدث العمليات</h3>
+        <div id="recent-tx" class="space-y-3"></div>
+    </section>
+
+    <!-- إدارة الحسابات -->
+    <section id="view-accounts" class="p-5 hidden view-slide">
+        <h2 class="text-xl font-bold mb-6">إدارة الحسابات</h2>
+        <div class="glass-3d p-4 mb-6 space-y-3">
+            <input type="text" id="acc-name" placeholder="اسم الحساب">
+            <input type="text" id="acc-type" placeholder="التصنيف (اختياري)">
+            <button onclick="addAccount()" class="w-full bg-blue-600 py-3 rounded-xl font-bold">إضافة حساب جديد</button>
+        </div>
+        <div id="accounts-list" class="space-y-3"></div>
+    </section>
+
+    <!-- الكشوفات -->
+    <section id="view-statements" class="p-5 hidden view-slide">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-bold">كشف الحساب</h2>
+            <button id="btn-pdf" onclick="exportPDF()" class="hidden bg-blue-500/20 text-blue-400 px-4 py-2 rounded-lg text-sm font-bold border border-blue-500/30">تصدير PDF</button>
+        </div>
+        
+        <select id="statement-filter" onchange="renderStatement()" class="mb-4"></select>
+        
+        <!-- ملخص رصيد الحساب المختار داخل التطبيق -->
+        <div id="statement-summary" class="grid grid-cols-3 gap-2 mb-4 hidden">
+             <div class="glass-3d p-2 text-center">
+                <p class="text-[9px] text-gray-500">صافي $</p>
+                <p id="sum-usd" class="en-font font-bold text-sm">0</p>
+             </div>
+             <div class="glass-3d p-2 text-center">
+                <p class="text-[9px] text-gray-500">صافي ₺</p>
+                <p id="sum-try" class="en-font font-bold text-sm">0</p>
+             </div>
+             <div class="glass-3d p-2 text-center">
+                <p class="text-[9px] text-gray-500">صافي ل.س</p>
+                <p id="sum-syp" class="en-font font-bold text-sm">0</p>
+             </div>
+        </div>
+
+        <div id="statement-content" class="glass-3d p-4 min-h-[150px]"></div>
+    </section>
+
+    <!-- المودال (إضافة حركة) -->
+    <div id="tx-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] hidden flex items-end">
+        <div class="bg-[#121b26] w-full rounded-t-[30px] p-6 border-t border-white/10 transition-transform duration-300 translate-y-full" id="modal-body">
+            <div class="flex gap-4 mb-5">
+                <button onclick="setTxType('in')" id="btn-in" class="flex-1 py-3 rounded-xl border-2 border-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold">لنا (قبض)</button>
+                <button onclick="setTxType('out')" id="btn-out" class="flex-1 py-3 rounded-xl border-2 border-transparent bg-white/5 text-gray-400 font-bold">لهم (دفع)</button>
+            </div>
+            <div class="space-y-4 mb-6">
+                <div class="flex gap-2">
+                    <select id="tx-acc" class="flex-[2]"></select>
+                    <select id="tx-cur" class="flex-1">
+                        <option value="$">$ دولار</option>
+                        <option value="₺">₺ تركي</option>
+                        <option value="ل.س">ل.س سوري</option>
+                    </select>
+                </div>
+                <input type="number" id="tx-val" inputmode="decimal" placeholder="0" class="text-center text-3xl font-bold en-font">
+                <input type="text" id="tx-note" placeholder="البيان / ملاحظة">
+            </div>
+            <div class="flex gap-3">
+                <button onclick="closeModal()" class="flex-1 py-3 rounded-xl bg-white/5">إلغاء</button>
+                <button onclick="saveTx()" class="flex-[2] py-3 rounded-xl bg-blue-600 font-bold">حفظ الحركة</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- زر الإضافة العائم -->
+    <button onclick="openModal()" class="fixed bottom-24 left-6 w-14 h-14 bg-blue-500 rounded-full flex items-center justify-center shadow-lg z-50">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+    </button>
+
+    <!-- التنقل السفلي -->
+    <nav class="bottom-nav">
+        <div class="nav-item active" onclick="switchTab('home', this)"><span>الرئيسية</span></div>
+        <div class="nav-item" onclick="switchTab('statements', this)"><span>الكشوفات</span></div>
+        <div class="nav-item" onclick="switchTab('accounts', this)"><span>الحسابات</span></div>
+    </nav>
+
+    <!-- قالب PDF مخفي ومحسن -->
+    <div id="pdf-template" class="hidden p-10 bg-white text-black text-right" dir="rtl">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #2481cc; padding-bottom: 15px; margin-bottom: 20px;">
+            <div>
+                <h1 style="font-size: 24px; color: #2481cc; margin: 0;">كشف حساب مالي تفصيلي</h1>
+                <p id="pdf-acc-name" style="font-size: 16px; margin: 5px 0 0 0; font-weight: bold;"></p>
+            </div>
+            <div style="text-align: left;">
+                <p style="font-size: 12px; margin: 0; color: #666;" id="pdf-date-now"></p>
+            </div>
+        </div>
+
+        <div id="pdf-summary-box" style="display: flex; gap: 10px; margin-bottom: 20px;"></div>
+
+        <table class="w-full border-collapse">
+            <thead>
+                <tr style="background-color: #f1f5f9;">
+                    <th style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; width: 100px;">التاريخ</th>
+                    <th style="border: 1px solid #cbd5e1; padding: 10px; text-align: right;">البيان (الملاحظات)</th>
+                    <th style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; width: 80px;">النوع</th>
+                    <th style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; width: 120px;">المبلغ</th>
+                </tr>
+            </thead>
+            <tbody id="pdf-table"></tbody>
+        </table>
+        
+        <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px; font-size: 10px; color: #999; text-align: center;">
+            تم إنشاء هذا التقرير عبر تطبيق المحاسب الشخصي - Telegram Cloud
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        let accounts = [];
+        let transactions = [];
+        let currentType = 'in';
+
+        // --- نظام التخزين السحابي ---
+        async function cloudSave() {
+            const data = JSON.stringify({ accounts, transactions });
+            localStorage.setItem('local_data', data);
+            
+            if (tg.isVersionAtLeast('6.1')) {
+                tg.CloudStorage.setItem('app_data_v1', data);
+            }
+        }
+
+        async function cloudLoad() {
+            if (tg.isVersionAtLeast('6.1')) {
+                tg.CloudStorage.getItem('app_data_v1', (err, value) => {
+                    if (!err && value) {
+                        const parsed = JSON.parse(value);
+                        accounts = parsed.accounts || [];
+                        transactions = parsed.transactions || [];
+                    } else {
+                        const local = localStorage.getItem('local_data');
+                        if (local) {
+                            const parsed = JSON.parse(local);
+                            accounts = parsed.accounts || [];
+                            transactions = parsed.transactions || [];
+                        }
+                    }
+                    hideLoader();
+                    initApp();
+                });
+            } else {
+                const local = localStorage.getItem('local_data');
+                if (local) {
+                    const parsed = JSON.parse(local);
+                    accounts = parsed.accounts || [];
+                    transactions = parsed.transactions || [];
+                }
+                hideLoader();
+                initApp();
+            }
+        }
+
+        function hideLoader() {
+            document.getElementById('loading-screen').style.display = 'none';
+        }
+
+        function initApp() {
+            if (tg.initDataUnsafe?.user) {
+                document.getElementById('user-display').innerText = tg.initDataUnsafe.user.first_name;
+            }
+            renderHome();
+            renderAccounts();
+        }
+
+        function switchTab(viewId, el) {
+            document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+            document.getElementById('view-' + viewId).classList.remove('hidden');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            el.classList.add('active');
+            if(viewId === 'statements') populateDropdown();
+            tg.HapticFeedback.selectionChanged();
+        }
+
+        function addAccount() {
+            const name = document.getElementById('acc-name').value;
+            const type = document.getElementById('acc-type').value;
+            if(!name) return tg.showAlert("يرجى إدخال اسم الحساب");
+            
+            accounts.push({ id: Date.now(), name, type });
+            cloudSave();
+            renderAccounts();
+            document.getElementById('acc-name').value = '';
+            tg.HapticFeedback.notificationOccurred('success');
+        }
+
+        function deleteAccount(id) {
+            tg.showConfirm("هل أنت متأكد من حذف الحساب؟ سيتم حذف جميع العمليات المرتبطة به نهائياً.", (confirmed) => {
+                if(confirmed) {
+                    accounts = accounts.filter(a => a.id !== id);
+                    transactions = transactions.filter(t => t.accId != id);
+                    cloudSave();
+                    renderAccounts();
+                    renderHome();
+                    tg.HapticFeedback.notificationOccurred('warning');
+                }
+            });
+        }
+
+        function renderAccounts() {
+            const list = document.getElementById('accounts-list');
+            const drop = document.getElementById('tx-acc');
+            list.innerHTML = '';
+            drop.innerHTML = '<option value="">اختر حساباً...</option>';
+
+            accounts.forEach(acc => {
+                list.innerHTML += `
+                    <div class="glass-3d p-4 flex justify-between items-center">
+                        <div>
+                            <p class="font-bold">${acc.name}</p>
+                            <p class="text-[10px] text-gray-500">${acc.type || 'بدون تصنيف'}</p>
+                        </div>
+                        <button onclick="deleteAccount(${acc.id})" class="p-2 text-red-400 bg-red-500/10 rounded-lg text-xs font-bold">
+                            حذف الحساب
+                        </button>
+                    </div>`;
+                drop.innerHTML += `<option value="${acc.id}">${acc.name}</option>`;
+            });
+        }
+
+        function setTxType(type) {
+            currentType = type;
+            document.getElementById('btn-in').className = type === 'in' ? "flex-1 py-3 rounded-xl border-2 border-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold" : "flex-1 py-3 rounded-xl bg-white/5 text-gray-400 font-bold";
+            document.getElementById('btn-out').className = type === 'out' ? "flex-1 py-3 rounded-xl border-2 border-rose-500 bg-rose-500/10 text-rose-400 font-bold" : "flex-1 py-3 rounded-xl bg-white/5 text-gray-400 font-bold";
+        }
+
+        function openModal() {
+            if(accounts.length === 0) return tg.showAlert("أضف حساباً أولاً");
+            document.getElementById('tx-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('modal-body').classList.remove('translate-y-full'), 10);
+        }
+
+        function closeModal() {
+            document.getElementById('modal-body').classList.add('translate-y-full');
+            setTimeout(() => document.getElementById('tx-modal').classList.add('hidden'), 300);
+        }
+
+        function saveTx() {
+            const accId = document.getElementById('tx-acc').value;
+            const amount = parseFloat(document.getElementById('tx-val').value);
+            const cur = document.getElementById('tx-cur').value;
+            const note = document.getElementById('tx-note').value;
+
+            if(!accId || isNaN(amount)) return tg.showAlert("يرجى ملء البيانات بشكل صحيح");
+
+            transactions.push({ id: Date.now(), accId, amount, currency: cur, type: currentType, note, date: new Date().toISOString() });
+            cloudSave();
+            closeModal();
+            renderHome();
+            document.getElementById('tx-val').value = '';
+            tg.HapticFeedback.notificationOccurred('success');
+        }
+
+        function renderHome() {
+            let nUSD = 0, nTRY = 0, nSYP = 0;
+            transactions.forEach(t => {
+                let v = t.type === 'in' ? t.amount : -t.amount;
+                if(t.currency === '$') nUSD += v;
+                else if(t.currency === '₺') nTRY += v;
+                else if(t.currency === 'ل.س') nSYP += v;
+            });
+
+            const getC = (v) => v > 0 ? 'text-emerald-400' : (v < 0 ? 'text-rose-400' : 'text-gray-400');
+            document.getElementById('bal-usd').innerHTML = `<span class="${getC(nUSD)}">${Math.round(nUSD).toLocaleString('en-US')}</span>`;
+            document.getElementById('bal-try').innerHTML = `<span class="${getC(nTRY)}">${Math.round(nTRY).toLocaleString('en-US')}</span>`;
+            document.getElementById('bal-syp').innerHTML = `<span class="${getC(nSYP)}">${Math.round(nSYP).toLocaleString('en-US')}</span>`;
+
+            const container = document.getElementById('recent-tx');
+            container.innerHTML = '';
+            transactions.slice(-10).reverse().forEach(tx => {
+                const acc = accounts.find(a => a.id == tx.accId);
+                const isP = tx.type === 'in';
+                container.innerHTML += `
+                    <div class="glass-3d p-3 flex justify-between items-center text-sm">
+                        <div class="flex flex-col">
+                            <span class="font-bold">${tx.note || 'بدون ملاحظة'}</span>
+                            <span class="text-[9px] text-gray-500">${acc ? acc.name : 'حساب محذوف'}</span>
+                        </div>
+                        <div class="en-font font-bold ${isP ? 'text-emerald-400' : 'text-rose-400'}">
+                            ${isP ? '+' : '-'}${Math.round(tx.amount).toLocaleString('en-US')} ${tx.currency}
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function populateDropdown() {
+            const s = document.getElementById('statement-filter');
+            s.innerHTML = '<option value="">اختر حساباً للمراجعة...</option>';
+            accounts.forEach(acc => s.innerHTML += `<option value="${acc.id}">${acc.name}</option>`);
+        }
+
+        function renderStatement() {
+            const accId = document.getElementById('statement-filter').value;
+            const cont = document.getElementById('statement-content');
+            const summary = document.getElementById('statement-summary');
+            
+            if(!accId) {
+                cont.innerHTML = "";
+                summary.classList.add('hidden');
+                document.getElementById('btn-pdf').classList.add('hidden');
+                return;
+            }
+            
+            const filtered = transactions.filter(t => t.accId == accId);
+            summary.classList.remove('hidden');
+            document.getElementById('btn-pdf').classList.toggle('hidden', filtered.length === 0);
+
+            // حساب الملخص للحساب المحدد
+            let sUSD = 0, sTRY = 0, sSYP = 0;
+            filtered.forEach(t => {
+                let v = t.type === 'in' ? t.amount : -t.amount;
+                if(t.currency === '$') sUSD += v;
+                else if(t.currency === '₺') sTRY += v;
+                else if(t.currency === 'ل.س') sSYP += v;
+            });
+
+            const getC = (v) => v >= 0 ? 'text-emerald-400' : 'text-rose-400';
+            document.getElementById('sum-usd').innerHTML = `<span class="${getC(sUSD)}">${Math.round(sUSD).toLocaleString('en-US')} $</span>`;
+            document.getElementById('sum-try').innerHTML = `<span class="${getC(sTRY)}">${Math.round(sTRY).toLocaleString('en-US')} ₺</span>`;
+            document.getElementById('sum-syp').innerHTML = `<span class="${getC(sSYP)}">${Math.round(sSYP).toLocaleString('en-US')} ل.س</span>`;
+            
+            cont.innerHTML = filtered.reverse().map(t => `
+                <div class="flex justify-between items-center py-2 border-b border-white/5 text-xs">
+                    <div class="flex flex-col">
+                        <span>${t.note || 'معاملة'}</span>
+                        <span class="text-[8px] text-gray-500">${new Date(t.date).toLocaleDateString('en-GB')}</span>
+                    </div>
+                    <span class="en-font font-bold ${t.type==='in'?'text-emerald-400':'text-rose-400'}">
+                        ${t.type==='in'?'+':'-'}${Math.round(t.amount).toLocaleString('en-US')} ${t.currency}
+                    </span>
+                </div>
+            `).join('') || '<p class="text-center text-gray-500 py-4">لا توجد عمليات مسجلة لهذا الحساب</p>';
+        }
+
+        function exportPDF() {
+            const accId = document.getElementById('statement-filter').value;
+            const acc = accounts.find(a => a.id == accId);
+            const filtered = transactions.filter(t => t.accId == accId);
+            
+            document.getElementById('pdf-acc-name').innerText = "الحساب: " + acc.name;
+            document.getElementById('pdf-date-now').innerText = "تاريخ الاستخراج: " + new Date().toLocaleString('ar-EG');
+
+            // حساب الملخص للـ PDF
+            let sUSD = 0, sTRY = 0, sSYP = 0;
+            filtered.forEach(t => {
+                let v = t.type === 'in' ? t.amount : -t.amount;
+                if(t.currency === '$') sUSD += v;
+                else if(t.currency === '₺') sTRY += v;
+                else if(t.currency === 'ل.س') sSYP += v;
+            });
+
+            document.getElementById('pdf-summary-box').innerHTML = `
+                <div style="flex:1; border: 1px solid #ddd; padding: 10px; text-align: center; border-radius: 8px;">
+                    <p style="margin:0; font-size: 10px; color: #666;">رصيد دولار</p>
+                    <b style="color: ${sUSD >= 0 ? '#10b981' : '#f43f5e'}">${Math.round(sUSD).toLocaleString()} $</b>
+                </div>
+                <div style="flex:1; border: 1px solid #ddd; padding: 10px; text-align: center; border-radius: 8px;">
+                    <p style="margin:0; font-size: 10px; color: #666;">رصيد تركي</p>
+                    <b style="color: ${sTRY >= 0 ? '#10b981' : '#f43f5e'}">${Math.round(sTRY).toLocaleString()} ₺</b>
+                </div>
+                <div style="flex:1; border: 1px solid #ddd; padding: 10px; text-align: center; border-radius: 8px;">
+                    <p style="margin:0; font-size: 10px; color: #666;">رصيد سوري</p>
+                    <b style="color: ${sSYP >= 0 ? '#10b981' : '#f43f5e'}">${Math.round(sSYP).toLocaleString()} ل.س</b>
+                </div>
+            `;
+
+            const tbody = document.getElementById('pdf-table');
+            tbody.innerHTML = filtered.map(t => `
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 8px; text-align: center; font-size: 10px; border: 1px solid #eee;">${new Date(t.date).toLocaleDateString('en-GB')}</td>
+                    <td style="padding: 8px; font-size: 11px; border: 1px solid #eee;">${t.note || '-'}</td>
+                    <td style="padding: 8px; text-align: center; font-size: 11px; border: 1px solid #eee; font-weight: bold; color: ${t.type==='in'?'#10b981':'#f43f5e'}">${t.type==='in'?'قبض':'دفع'}</td>
+                    <td style="padding: 8px; text-align: center; font-size: 11px; border: 1px solid #eee; font-weight: bold;">${Math.round(t.amount).toLocaleString()} ${t.currency}</td>
+                </tr>
+            `).join('');
+            
+            const temp = document.getElementById('pdf-template');
+            temp.classList.remove('hidden');
+            
+            const opt = {
+                margin: 10,
+                filename: `كشف_${acc.name}_${new Date().toLocaleDateString()}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(temp).save().then(() => temp.classList.add('hidden'));
+        }
+
+        window.onload = cloudLoad;
+    </script>
+</body>
+</html>
